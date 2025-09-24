@@ -1,0 +1,12 @@
+{
+    "/css/app.css": "/css/app.css",
+    "/css/contact.css": "/css/contact.css",
+    "/module/booking/css/checkout.css": "/module/booking/css/checkout.css",
+    "/module/user/css/user.css": "/module/user/css/user.css",
+    "/module/user/css/profile.css": "/module/user/css/profile.css",
+    "/module/news/css/news.css": "/module/news/css/news.css",
+    "/module/media/css/browser.css": "/module/media/css/browser.css",
+    "/module/course2/css/course.css": "/module/course2/css/course.css",
+    "/module/course2/css/header.css": "/module/course2/css/header.css",
+    "/module/course2/css/study.css": "/module/course2/css/study.css"
+}

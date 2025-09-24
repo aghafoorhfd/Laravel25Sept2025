@@ -1,30 +1,24 @@
-/vendor/
-node_modules/
+/node_modules
+/public/hot
+/public/storage
+/public/uploads/0000
+/storage/*.key
+storage/app/*
+!storage/app/public/
+storage/app/public/*
+!storage/app/public/demo/
+/vendor
+/.idea
+/resources/ckeditor/node_modules/
+.env
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
 npm-debug.log
 yarn-error.log
 
-# Laravel 4 specific
-bootstrap/compiled.php
-app/storage/
-
-# Laravel 5 & Lumen specific
-public/storage
-public/hot
-
-# Laravel 5 & Lumen specific with changed public path
-public_html/storage
-public_html/hot
-
-storage/*.key
-.env
-Homestead.yaml
-Homestead.json
-/.vagrant
-.phpunit.result.cache
-
-/public/build
-/storage/pail
-.env.backup
-.env.production
-.phpactor.json
-auth.json
+/resources/admin/scss/css
+/public/module/tour/css
+/public/module/booking/css
+/storage/installed
+plugins/Hotel/Resources/assets/css/
