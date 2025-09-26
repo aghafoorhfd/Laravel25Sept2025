@@ -31,3 +31,10 @@ MAIL_ENCRYPTION=null
 PUSHER_APP_ID=
 PUSHER_APP_KEY=
 PUSHER_APP_SECRET=
+
+# EasyPaisa Payment Gateway Configuration
+EASYPAISA_STORE_ID=70126
+EASYPAISA_ACCOUNT_ID=118028798
+EASYPAISA_MERCHANT_NAME=StudentCare
+EASYPAISA_SECRET_KEY=test_secret_key_for_local
+EASYPAISA_CALLBACK_URL=https://kingcambridgesolutions.com/booking/confirm/easypaisa

@@ -120,6 +120,11 @@ class BookingController extends \App\Http\Controllers\Controller
     }
 
     $payment_gateway = $request->input('payment_gateway');
+    
+    // Handle case where multiple payment_gateway values are sent (array)
+    if (is_array($payment_gateway)) {
+        $payment_gateway = end($payment_gateway); // Get the last value
+    }
     $gateways = get_payment_gateways();
 
     if (empty($gateways[$payment_gateway]) || !class_exists($gateways[$payment_gateway])) {
@@ -166,6 +171,11 @@ class BookingController extends \App\Http\Controllers\Controller
         $user->save();
 
         $booking->addMeta('locale', app()->getLocale());
+
+        // Debug: Log the payment gateway being processed
+        \Log::info('Processing payment with gateway: ' . $payment_gateway);
+        \Log::info('All payment_gateway values: ' . json_encode($request->input('payment_gateway')));
+        \Log::info('Request data: ' . json_encode($request->all()));
 
         // Stripe Payment Processing
         if ($payment_gateway == 'stripe') {
@@ -229,6 +239,7 @@ class BookingController extends \App\Http\Controllers\Controller
         }
 
         // Other gateways process normally
+        \Log::info('Processing non-Stripe gateway: ' . $payment_gateway);
         Cart::destroy();
         return $gatewayObj->process($request, $booking);
 
@@ -248,12 +259,8 @@ public function handleEasyPaisaCallback(Request $request)
     if ($result['success']) {
         $booking = Booking::find($result['order_id']);
         if ($booking) {
-            $booking->payment_status = 'paid';
-            $booking->transaction_id = $result['transaction_id'] ?? null;
-            $booking->status = 'confirmed'; // Optional: mark confirmed here
-            $booking->save();
-
-            return redirect()->route('booking.success', ['booking' => $booking->id])
+            // Payment is already processed in the gateway callback
+            return redirect()->route('booking.detail', ['code' => $booking->code])
                 ->with('success', 'Payment successful!');
         }
     }
@@ -262,10 +269,14 @@ public function handleEasyPaisaCallback(Request $request)
 }
 
 /**
- * Handle Stripe payment confirmation after redirect
+ * Handle payment confirmation after redirect
  */
 public function confirmPayment(Request $request, $gateway)
 {
+    if ($gateway === 'easypaisa') {
+        return $this->handleEasyPaisaCallback($request);
+    }
+    
     if ($gateway !== 'stripe') {
         return $this->sendError(__("Unsupported payment gateway"));
     }

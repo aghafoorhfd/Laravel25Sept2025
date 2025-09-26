@@ -236,6 +236,18 @@
     form.addEventListener('submit', function(e) {
         const selectedGateway = document.querySelector('input[name="payment_gateway"]:checked').value;
         
+        // Remove any existing hidden payment_gateway inputs to avoid duplicates
+        document.querySelectorAll('input[name="payment_gateway"][type="hidden"]').forEach(input => {
+            input.remove();
+        });
+        
+        // Add the selected payment gateway as a hidden input
+        const gatewayInput = document.createElement('input');
+        gatewayInput.type = 'hidden';
+        gatewayInput.name = 'payment_gateway';
+        gatewayInput.value = selectedGateway;
+        form.appendChild(gatewayInput);
+        
         if (selectedGateway === 'easypaisa') {
             e.preventDefault();
             handleEasyPaisaPayment();
@@ -253,13 +265,26 @@
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
             }
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.authToken) {
-                // Submit to EasyPaisa with auth token
-                submitToEasyPaisa(data.authToken);
+        .then(response => {
+            // Check if response is HTML (EasyPaisa redirect) or JSON
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('text/html')) {
+                // For EasyPaisa, we need to display the HTML response
+                return response.text().then(html => {
+                    // Create a new window/tab with the EasyPaisa payment page
+                    const newWindow = window.open('', '_blank');
+                    newWindow.document.write(html);
+                    newWindow.document.close();
+                });
             } else {
-                alert('Payment failed: ' + (data.message || 'Unknown error'));
+                // For other responses, try to parse as JSON
+                return response.json().then(data => {
+                    if (data.authToken) {
+                        submitToEasyPaisa(data.authToken);
+                    } else {
+                        alert('Payment failed: ' + (data.message || 'Unknown error'));
+                    }
+                });
             }
         })
         .catch(error => {

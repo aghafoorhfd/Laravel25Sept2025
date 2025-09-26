@@ -58,7 +58,7 @@
   <div id="card-element"><!-- Stripe.js will insert card input here --></div>
   <div id="card-errors" role="alert"></div>
 
-  <input type="hidden" name="payment_gateway" value="stripe">
+  {{-- Payment gateway is handled by the main form --}}
 </div>
 
 <script src="https://js.stripe.com/v3/"></script>
