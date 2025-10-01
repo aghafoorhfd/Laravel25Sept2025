@@ -208,7 +208,18 @@
 
 <script>
    document.addEventListener('DOMContentLoaded', function() {
-    // Show/hide payment method forms
+    // Get the current total amount from the page
+    const originalTotal = {{ Cart::total() }};
+    
+    // Calculate EasyPaisa total from cart items
+    let easypaisaTotal = 0;
+    @foreach(Cart::content() as $cartItem)
+        @if($cartItem->model && isset($cartItem->model->easypaisa_price))
+            easypaisaTotal += {{ $cartItem->model->easypaisa_price }} * {{ $cartItem->qty }};
+        @endif
+    @endforeach
+    
+    // Show/hide payment method forms and update total
     function togglePaymentForms() {
         const selectedGateway = document.querySelector('input[name="payment_gateway"]:checked').value;
         const stripeDiv = document.getElementById('payment-stripe');
@@ -217,9 +228,39 @@
         if (selectedGateway === 'stripe') {
             stripeDiv.style.display = 'block';
             easypaisaDiv.style.display = 'none';
+            updateTotalDisplay(originalTotal, 'USD');
         } else if (selectedGateway === 'easypaisa') {
             stripeDiv.style.display = 'none';
             easypaisaDiv.style.display = 'block';
+            updateTotalDisplay(easypaisaTotal, 'PKR');
+        }
+    }
+    
+    // Function to update the total display in the sidebar
+    function updateTotalDisplay(amount, currency) {
+        const totalElement = document.getElementById('checkout-total');
+        const currencyNote = document.getElementById('currency-note');
+        
+        // Update cart item prices
+        const cartItemPrices = document.querySelectorAll('.cart-item-price');
+        cartItemPrices.forEach(priceElement => {
+            if (currency === 'PKR') {
+                priceElement.textContent = priceElement.getAttribute('data-pkr-price');
+            } else {
+                priceElement.textContent = priceElement.getAttribute('data-usd-price');
+            }
+        });
+        
+        if (totalElement) {
+            if (currency === 'PKR') {
+                // Show only EasyPaisa amount
+                totalElement.textContent = 'PKR ' + Math.round(amount).toLocaleString();
+                if (currencyNote) currencyNote.style.display = 'block';
+            } else {
+                // Show only USD amount
+                totalElement.textContent = '$' + amount.toFixed(2);
+                if (currencyNote) currencyNote.style.display = 'none';
+            }
         }
     }
 

@@ -25,6 +25,9 @@ class EasyPaisaGateway
         $accountId = env('EASYPAISA_ACCOUNT_ID', '118028798');
         $merchantName = env('EASYPAISA_MERCHANT_NAME', 'StudentCare');
         
+        // Use the EasyPaisa amount from the course (already set in booking total)
+        $easypaisaAmount = $booking->total;
+        
         // Generate order reference number
         $orderRefNum = 'KCS_' . $booking->id . '_' . time();
         
@@ -33,18 +36,18 @@ class EasyPaisaGateway
         
         // Store the order reference in booking meta for verification
         $booking->addMeta('easypaisa_order_ref', $orderRefNum);
-        $booking->addMeta('easypaisa_amount', $booking->total);
+        $booking->addMeta('easypaisa_amount', $easypaisaAmount);
         $booking->save();
         
         // EasyPaisa integration using environment variables
         $postData = [
-            'amount' => number_format($booking->total, 2, '.', ''),
+            'amount' => number_format($easypaisaAmount, 2, '.', ''),
             'storeId' => env('EASYPAISA_STORE_ID', '70126'),
             'postBackURL' => env('EASYPAISA_CALLBACK_URL', route('booking.confirmPayment', ['gateway' => 'easypaisa'])),
             'orderRefNum' => $orderRefNum,
             'expiryDate' => $expiryDate,
             'autoRedirect' => '1',
-            'merchantHashedReq' => $this->generateHash(env('EASYPAISA_STORE_ID', '70126'), $orderRefNum, $booking->total, $expiryDate),
+            'merchantHashedReq' => $this->generateHash(env('EASYPAISA_STORE_ID', '70126'), $orderRefNum, $easypaisaAmount, $expiryDate),
             'paymentMethod' => 'MA',
         ];
 
