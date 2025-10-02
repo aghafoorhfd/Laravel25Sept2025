@@ -260,7 +260,7 @@ public function handleEasyPaisaCallback(Request $request)
         'headers' => $request->headers->all()
     ]);
 
-    $gateway = new \Modules\Booking\Gateways\EasyPaisaGateway();
+    $gateway = new EasyPaisaGateway();
     $result = $gateway->handleCallback($request);
 
     if ($result['success']) {
