@@ -7,7 +7,7 @@ return [
         // 'offline_payment'=>Modules\Booking\Gateways\OfflinePaymentGateway::class,
         'paypal'=>Modules\Booking\Gateways\PaypalGateway::class,
         'stripe'=>Modules\Booking\Gateways\StripeGateway::class,
-        'easypaisa'=>Modules\Booking\Gateways\EasypaisaGateway::class
+        'easypaisa'=>Modules\Booking\Gateways\EasyPaisaGateway::class
     ],
     'statuses'=>[
         'completed',

@@ -40,8 +40,10 @@ Route::get('paypal-form', '\Modules\Booking\Controllers\PayPalPaymentController@
 Route::post('/checkout', '\Modules\Booking\Controllers\BookingController@doCheckout')->name('booking.doCheckout');
 Route::get('/booking/payment/confirm/{gateway}', [BookingController::class, 'confirmPayment'])->name('booking.confirmPayment');
 
-
+// EasyPaisa specific routes
 Route::match(['get', 'post'], '/payment/easypaisa/callback', [BookingController::class, 'handleEasyPaisaCallback'])->name('booking.easypaisa.callback');
+Route::match(['get', 'post'], '/booking/confirm/easypaisa', [BookingController::class, 'handleEasyPaisaCallback'])->name('booking.easypaisa.confirm');
+Route::get('/payment/easypaisa/cancel', [BookingController::class, 'handleEasyPaisaCancel'])->name('booking.easypaisa.cancel');
 
 // Media file fetch by id (JSON)
 Route::get('media/get-file', [\Modules\Media\Controllers\MediaController::class, 'getFile'])->name('media.get_file');

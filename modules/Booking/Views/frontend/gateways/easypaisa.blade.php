@@ -1,21 +1,25 @@
 <div class="card_stripe">
-    <form action="https://easypay.easypaisa.com.pk/easypay/Index.jsf" method="POST" id="myCCForm">
-        <input type="text" name="amount" value="{{$post_data['amount']}}">
-        <input type="text" name="storeId" value="{{$post_data['storeId']}}">
-        <input type="text" name="postBackURL" value="{{$post_data['postBackURL']}}">
-        <input type="text" name="orderRefNum" value="{{$post_data['orderRefNum']}}">
-        <input type="text" name="expiryDate" value="{{$post_data['expiryDate']}}">
-        <input type="text" name="autoRedirect" value="{{$post_data['autoRedirect']}}">
-        <input type="text" name="merchantHashedReq" value="{{$post_data['merchantHashedReq']}}">
-        <input type="text" name="paymentMethod" value="{{$post_data['paymentMethod']}}">
+    <form action="{{ $form_action }}" method="POST" id="easypaisaForm">
+        @foreach($post_data as $key => $value)
+            <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+        @endforeach
 
         <div class="card-body p-3">   
-            <h2>Pay With</h2>
-            <br>
+            <h2>Pay With EasyPaisa</h2>
+            <div class="text-center mb-3">
+                <img src="{{ asset('images/easypaisa-logo.png') }}" alt="EasyPaisa" style="max-height: 50px;" onerror="this.style.display='none'">
+            </div>
             <div class="text-right">
-                <a href="index.php" id="payBtn" class="btn btn-primary py-2">Back</a> 
-                <input type="submit" id="payBtn" class="btn btn-info py-2" value="Proceed to Checkhout">
+                <a href="{{ route('booking.checkout') }}" class="btn btn-secondary py-2">Back</a> 
+                <input type="submit" class="btn btn-success py-2" value="Proceed to EasyPaisa Payment">
             </div>
         </div>
     </form>
 </div>
+
+<script>
+    // Auto-submit form after 2 seconds
+    setTimeout(function() {
+        document.getElementById('easypaisaForm').submit();
+    }, 2000);
+</script>

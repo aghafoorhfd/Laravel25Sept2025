@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Gloudemans\Shoppingcart\Facades\Cart;
-use Modules\Booking\Gateways\EasypaisaGateway;
+use Modules\Booking\Gateways\EasyPaisaGateway;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class BookingController extends \App\Http\Controllers\Controller
@@ -29,7 +29,7 @@ class BookingController extends \App\Http\Controllers\Controller
 
     public function checkout()
     {
-        // $test =  new EasypaisaGateway();
+        // $test =  new EasyPaisaGateway();
         // $authToken = $test->getAuthToken();
         // echo $authToken; die;
         // $test->verifyToken($authToken); die;
@@ -249,37 +249,37 @@ class BookingController extends \App\Http\Controllers\Controller
         }
         return $this->sendError($exception->getMessage().' - '.$exception->getFile().' - '.$exception->getLine());
     }
-}
+    }
 
-public function handleEasyPaisaCallback(Request $request)
-{
-    // Log the callback request for debugging
-    \Log::info('EasyPaisa Callback Received', [
-        'method' => $request->method(),
-        'data' => $request->all(),
-        'headers' => $request->headers->all()
-    ]);
+    public function handleEasyPaisaCallback(Request $request)
+    {
+        // Log the callback request for debugging
+        \Log::info('EasyPaisa Callback Received', [
+            'method' => $request->method(),
+            'data' => $request->all(),
+            'headers' => $request->headers->all()
+        ]);
 
-    $gateway = new EasyPaisaGateway();
-    $result = $gateway->handleCallback($request);
+        $gateway = new EasyPaisaGateway();
+        $result = $gateway->handleCallback($request);
 
-    if ($result['success']) {
-        $booking = Booking::find($result['order_id']);
-        if ($booking) {
-            // Payment is already processed in the gateway callback
-            return redirect()->route('booking.detail', ['code' => $booking->code])
-                ->with('success', 'Payment successful!');
+        if ($result['success']) {
+            $booking = Booking::find($result['order_id']);
+            if ($booking) {
+                // Payment is already processed in the gateway callback
+                return redirect()->route('booking.detail', ['code' => $booking->code])
+                    ->with('success', 'Payment successful!');
+            }
         }
-    }
 
-    // If it's a GET request (likely a redirect from EasyPaisa), redirect to checkout
-    if ($request->isMethod('get')) {
-        return redirect()->route('booking.checkout')
-            ->with('error', 'Payment was not completed. Please try again.');
-    }
+        // If it's a GET request (likely a redirect from EasyPaisa), redirect to checkout
+        if ($request->isMethod('get')) {
+            return redirect()->route('booking.checkout')
+                ->with('error', 'Payment was not completed. Please try again.');
+        }
 
-    return redirect()->route('booking.checkout')->with('error', 'Payment failed or cancelled. Please try again.');
-}
+        return redirect()->route('booking.checkout')->with('error', 'Payment failed or cancelled. Please try again.');
+    }
 
 /**
  * Handle EasyPaisa payment cancellation

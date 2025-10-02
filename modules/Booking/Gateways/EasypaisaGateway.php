@@ -58,6 +58,12 @@ class EasyPaisaGateway
             return ['error' => 'EasyPaisa configuration incomplete'];
         }
         
+        // Validate callback URL format
+        if (!filter_var($callbackUrl, FILTER_VALIDATE_URL)) {
+            \Log::error('EasyPaisa invalid callback URL:', ['callback_url' => $callbackUrl]);
+            return ['error' => 'Invalid callback URL format'];
+        }
+        
         // Get the return URL (checkout page) and cancellation URL
         $returnUrl = route('booking.checkout');
         $cancelUrl = route('booking.easypaisa.cancel');
@@ -73,7 +79,9 @@ class EasyPaisaGateway
             'expiryDate' => $expiryDate,
             'autoRedirect' => '1',
             'merchantHashedReq' => $this->generateHash($storeId, $orderRefNum, $easypaisaAmount, $expiryDate),
-            'paymentMethod' => 'MA',
+            'paymentMethod' => 'MA_PAYMENT_METHOD', // Correct EasyPaisa payment method value
+            'merchantName' => $merchantName,
+            'accountId' => $accountId,
         ];
 
         // Log the payment data being sent to EasyPaisa (for production debugging)
@@ -242,7 +250,7 @@ public function isAvailable()
         $hashString = $storeId . '&' . $orderRefNum . '&' . $formattedAmount . '&' . $expiryDate;
         $secretKey = env('EASYPAISA_SECRET_KEY', 'FTP0EKH68SWIJC5K');
         
-        // Generate hash using MD5
+        // Generate hash using MD5 (EasyPaisa standard)
         $hash = md5($hashString . $secretKey);
         
         // Log the hash generation for debugging
@@ -252,7 +260,7 @@ public function isAvailable()
             'amount' => $formattedAmount,
             'expiry_date' => $expiryDate,
             'hash_string' => $hashString,
-            'secret_key' => $secretKey,
+            'secret_key' => $secretKey ? 'SET' : 'NOT SET',
             'generated_hash' => $hash
         ]);
         
