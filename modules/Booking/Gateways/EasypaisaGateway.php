@@ -26,7 +26,13 @@ class EasyPaisaGateway
         $merchantName = env('EASYPAISA_MERCHANT_NAME', 'StudentCare');
         
         // Use the EasyPaisa amount from the course (already set in booking total)
-        $easypaisaAmount = $booking->total;
+        $easypaisaAmount = (float) $booking->total;
+        
+        // Validate amount
+        if ($easypaisaAmount <= 0) {
+            \Log::error('EasyPaisa: Invalid amount', ['amount' => $easypaisaAmount]);
+            return ['error' => 'Invalid payment amount'];
+        }
         
         // Generate order reference number
         $orderRefNum = 'KCS_' . $booking->id . '_' . time();
@@ -39,20 +45,47 @@ class EasyPaisaGateway
         $booking->addMeta('easypaisa_amount', $easypaisaAmount);
         $booking->save();
         
+        // Validate required parameters
+        $storeId = env('EASYPAISA_STORE_ID', '70126');
+        $secretKey = env('EASYPAISA_SECRET_KEY', 'FTP0EKH68SWIJC5K');
+        $callbackUrl = env('EASYPAISA_CALLBACK_URL', route('booking.easypaisa.callback'));
+        
+        if (empty($storeId) || empty($secretKey)) {
+            \Log::error('EasyPaisa: Missing required environment variables', [
+                'storeId' => $storeId,
+                'secretKey' => $secretKey ? 'SET' : 'NOT SET'
+            ]);
+            return ['error' => 'EasyPaisa configuration incomplete'];
+        }
+        
+        // Get the return URL (checkout page) and cancellation URL
+        $returnUrl = route('booking.checkout');
+        $cancelUrl = route('booking.easypaisa.cancel');
+        
         // EasyPaisa integration using environment variables
         $postData = [
             'amount' => number_format($easypaisaAmount, 2, '.', ''),
-            'storeId' => env('EASYPAISA_STORE_ID', '70126'),
-            'postBackURL' => env('EASYPAISA_CALLBACK_URL', route('booking.confirmPayment', ['gateway' => 'easypaisa'])),
+            'storeId' => $storeId,
+            'postBackURL' => $callbackUrl,
+            'returnUrl' => $returnUrl,
+            'cancelUrl' => $cancelUrl,
             'orderRefNum' => $orderRefNum,
             'expiryDate' => $expiryDate,
             'autoRedirect' => '1',
-            'merchantHashedReq' => $this->generateHash(env('EASYPAISA_STORE_ID', '70126'), $orderRefNum, $easypaisaAmount, $expiryDate),
+            'merchantHashedReq' => $this->generateHash($storeId, $orderRefNum, $easypaisaAmount, $expiryDate),
             'paymentMethod' => 'MA',
         ];
 
-        // Debug: Log the payment data being sent to EasyPaisa
-        \Log::info('EasyPaisa Payment Data:', $postData);
+        // Log the payment data being sent to EasyPaisa (for production debugging)
+        \Log::info('EasyPaisa Payment Data:', [
+            'order_ref' => $orderRefNum,
+            'amount' => $easypaisaAmount,
+            'store_id' => $storeId,
+            'callback_url' => $callbackUrl,
+            'return_url' => $returnUrl,
+            'cancel_url' => $cancelUrl,
+            'expiry_date' => $expiryDate
+        ]);
 
         return [
             'post_data' => $postData,
@@ -102,9 +135,12 @@ class EasyPaisaGateway
     }
 public function isAvailable()
 {
-    // For now, return true to allow testing. In production, add proper checks:
-    // return env('EASYPAISA_API_KEY') && env('EASYPAISA_MERCHANT_ID') && env('EASYPAISA_CALLBACK_URL');
-    return true;
+    // Check if all required environment variables are set
+    $storeId = env('EASYPAISA_STORE_ID');
+    $secretKey = env('EASYPAISA_SECRET_KEY');
+    $callbackUrl = env('EASYPAISA_CALLBACK_URL');
+    
+    return !empty($storeId) && !empty($secretKey) && !empty($callbackUrl);
 }
 
     /**
@@ -112,6 +148,14 @@ public function isAvailable()
      */
     public function handleCallback($request)
     {
+        // Log all incoming data for debugging
+        \Log::info('EasyPaisa Callback Data:', [
+            'method' => $request->method(),
+            'all_data' => $request->all(),
+            'query_params' => $request->query(),
+            'post_data' => $request->post()
+        ]);
+
         $orderRefNum = $request->input('orderRefNum');
         $status = $request->input('status');
         $transactionId = $request->input('transactionId');
@@ -191,11 +235,28 @@ public function isAvailable()
      */
     private function generateHash($storeId, $orderRefNum, $amount, $expiryDate)
     {
-        $hashString = $storeId . '&' . $orderRefNum . '&' . number_format($amount, 2, '.', '') . '&' . $expiryDate;
-        $secretKey = env('EASYPAISA_SECRET_KEY', 'test_secret_key_for_local');
+        // Format amount to 2 decimal places
+        $formattedAmount = number_format($amount, 2, '.', '');
         
-        // Generate hash using the secret key from environment
-        return md5($hashString . $secretKey);
+        // Create hash string in the order: storeId&orderRefNum&amount&expiryDate
+        $hashString = $storeId . '&' . $orderRefNum . '&' . $formattedAmount . '&' . $expiryDate;
+        $secretKey = env('EASYPAISA_SECRET_KEY', 'FTP0EKH68SWIJC5K');
+        
+        // Generate hash using MD5
+        $hash = md5($hashString . $secretKey);
+        
+        // Log the hash generation for debugging
+        \Log::info('EasyPaisa Hash Generation:', [
+            'store_id' => $storeId,
+            'order_ref' => $orderRefNum,
+            'amount' => $formattedAmount,
+            'expiry_date' => $expiryDate,
+            'hash_string' => $hashString,
+            'secret_key' => $secretKey,
+            'generated_hash' => $hash
+        ]);
+        
+        return $hash;
     }
 
     public function getOptionsConfigs()

@@ -253,6 +253,13 @@ class BookingController extends \App\Http\Controllers\Controller
 
 public function handleEasyPaisaCallback(Request $request)
 {
+    // Log the callback request for debugging
+    \Log::info('EasyPaisa Callback Received', [
+        'method' => $request->method(),
+        'data' => $request->all(),
+        'headers' => $request->headers->all()
+    ]);
+
     $gateway = new \Modules\Booking\Gateways\EasyPaisaGateway();
     $result = $gateway->handleCallback($request);
 
@@ -265,7 +272,29 @@ public function handleEasyPaisaCallback(Request $request)
         }
     }
 
-    return redirect()->route('booking.failed')->with('error', 'Payment failed or cancelled.');
+    // If it's a GET request (likely a redirect from EasyPaisa), redirect to checkout
+    if ($request->isMethod('get')) {
+        return redirect()->route('booking.checkout')
+            ->with('error', 'Payment was not completed. Please try again.');
+    }
+
+    return redirect()->route('booking.checkout')->with('error', 'Payment failed or cancelled. Please try again.');
+}
+
+/**
+ * Handle EasyPaisa payment cancellation
+ */
+public function handleEasyPaisaCancel(Request $request)
+{
+    // Log the cancellation for debugging
+    \Log::info('EasyPaisa Payment Cancelled', [
+        'request_data' => $request->all(),
+        'user_id' => auth()->id()
+    ]);
+
+    // Redirect back to checkout with a message and URL parameter
+    return redirect()->route('booking.checkout', ['payment_cancelled' => '1'])
+        ->with('error', 'Payment was cancelled. You can try again or choose a different payment method.');
 }
 
 /**

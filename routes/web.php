@@ -41,7 +41,7 @@ Route::post('/checkout', '\Modules\Booking\Controllers\BookingController@doCheck
 Route::get('/booking/payment/confirm/{gateway}', [BookingController::class, 'confirmPayment'])->name('booking.confirmPayment');
 
 
-Route::post('/payment/easypaisa/callback', [BookingController::class, 'handleEasyPaisaCallback'])->name('booking.easypaisa.callback');
+Route::match(['get', 'post'], '/payment/easypaisa/callback', [BookingController::class, 'handleEasyPaisaCallback'])->name('booking.easypaisa.callback');
 
 // Media file fetch by id (JSON)
 Route::get('media/get-file', [\Modules\Media\Controllers\MediaController::class, 'getFile'])->name('media.get_file');

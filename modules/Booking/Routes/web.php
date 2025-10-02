@@ -3,6 +3,7 @@ use Illuminate\Support\Facades\Route;
 // Booking
 Route::get('/cart','BookingController@cart')->name('booking.cart')->middleware('auth');
 Route::get('/checkout','BookingController@checkout')->name('booking.checkout')->middleware('auth');
+Route::get('/payment/easypaisa/cancel','BookingController@handleEasyPaisaCancel')->name('booking.easypaisa.cancel')->middleware('auth');
 
 Route::group(['prefix'=>config('booking.booking_route_prefix'),'middleware'=>['auth']],function(){
     Route::post('/addToCart','BookingController@addToCart')->name('booking.addToCart');

@@ -264,6 +264,16 @@
         }
     }
 
+    // Check if user was redirected back from EasyPaisa
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('payment_cancelled') === '1') {
+        // Show error message if payment was cancelled
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-warning';
+        alertDiv.innerHTML = 'Payment was cancelled. You can try again or choose a different payment method.';
+        document.querySelector('.form-section').insertBefore(alertDiv, document.querySelector('.form-section').firstChild);
+    }
+
     // Initial call on page load
     togglePaymentForms();
 
