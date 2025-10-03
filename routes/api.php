@@ -16,3 +16,6 @@ use Illuminate\Http\Request;
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+// Easypaisa callback (API)
+Route::match(['get','post'],'/easypaisa/callback','\Modules\Booking\Controllers\BookingController@easypaisaCallback')->name('api.easypaisa.callback');
