@@ -338,9 +338,27 @@ class BookingController extends \App\Http\Controllers\Controller
             'headers' => $request->headers->all(),
         ]);
 
-        $orderRef = $request->input('orderRefNum') ?: $request->input('orderRef');
-        $responseCode = $request->input('responseCode') ?: $request->input('status');
-        $amount = $request->input('amount');
+        $payloadAll = $request->all();
+        $lower = [];
+        foreach ($payloadAll as $k => $v) { $lower[strtolower($k)] = $v; }
+
+        // Accept multiple possible keys for order reference (providers vary)
+        $orderRef = $request->input('orderRefNum')
+            ?: $request->input('orderRef')
+            ?: ($lower['orderrefnum'] ?? null)
+            ?: ($lower['orderref'] ?? null)
+            ?: ($lower['orderrefnumber'] ?? null)
+            ?: ($lower['orderid'] ?? null)
+            ?: $request->query('orderRefNum')
+            ?: $request->query('orderRef');
+
+        // Map response/status code from various fields
+        $responseCode = $request->input('responseCode')
+            ?: $request->input('status')
+            ?: ($lower['responsecode'] ?? null)
+            ?: ($lower['status'] ?? null);
+
+        $amount = $request->input('amount') ?? ($lower['amount'] ?? null);
 
         if (!$orderRef) {
             return response()->json(['status' => false, 'message' => 'Missing orderRefNum'], 422);
