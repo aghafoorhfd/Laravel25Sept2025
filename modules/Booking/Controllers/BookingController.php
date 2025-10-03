@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Gloudemans\Shoppingcart\Facades\Cart;
-use Modules\Booking\Gateways\EasyPaisaGateway;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Facades\Http;
 
@@ -415,7 +414,7 @@ public function handleEasyPaisaCancel(Request $request)
 public function confirmPayment(Request $request, $gateway)
 {
     if ($gateway === 'easypaisa') {
-        return $this->handleEasyPaisaCallback($request);
+        return $this->easypaisaCallback($request);
     }
     
     if ($gateway !== 'stripe') {
