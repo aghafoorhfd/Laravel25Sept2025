@@ -333,116 +333,45 @@ class BookingController extends \App\Http\Controllers\Controller
 
     public function easypaisaCallback(Request $request)
     {
-        \Log::info('Easypaisa callback received', [
-            'method' => $request->method(),
-            'data' => $request->all(),
-            'query' => $request->query(),
-            'headers' => $request->headers->all(),
-            'raw' => $request->getContent(),
-            'ip' => $request->ip(),
-            'user_agent' => $request->userAgent(),
-        ]);
+        \Log::info('Easypaisa callback received', $request->all());
 
-        $payloadAll = $request->all();
-        $lower = [];
-        foreach ($payloadAll as $k => $v) { $lower[strtolower($k)] = $v; }
-
-        // Attempt to decode raw body if vendor posts JSON or nested structure
-        $raw = $request->getContent();
-        $rawJson = null;
-        if ($raw) {
-            try { $rawJson = json_decode($raw, true); } catch (\Throwable $e) { $rawJson = null; }
+        if (!$request->has('orderRefNum')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Missing orderRefNum',
+            ]);
         }
 
-        $findKey = function(array $source, array $candidates) {
-            foreach ($candidates as $key) {
-                if (array_key_exists($key, $source)) return $source[$key];
+        $orderRefNum = $request->get('orderRefNum');
+        $responseCode = $request->get('responseCode');
+
+        if ($responseCode === '0000') {
+            // Success – find booking by orderRefNum
+            // Try direct column if exists, otherwise fallback to booking meta
+            $booking = Booking::where('order_ref_num', $orderRefNum)->first();
+            if (!$booking) {
+                $booking = Booking::whereHas('meta', function($q) use ($orderRefNum) {
+                    $q->where('name','easypaisa_order_ref')->where('val',$orderRefNum);
+                })->first();
             }
-            $lowerSource = [];
-            foreach ($source as $k => $v) { $lowerSource[strtolower($k)] = $v; }
-            foreach ($candidates as $key) {
-                $lk = strtolower($key);
-                if (array_key_exists($lk, $lowerSource)) return $lowerSource[$lk];
+
+            if ($booking) {
+                $booking->status = 'paid';
+                $booking->save();
             }
-            return null;
-        };
 
-        // Accept multiple possible keys for order reference (providers vary)
-        $orderRef = $findKey($payloadAll, ['orderRefNum','orderRef','orderRefNumber','orderId','refNo','refNum'])
-            ?: ($rawJson ? $findKey($rawJson, ['orderRefNum','orderRef','orderRefNumber','orderId','refNo','refNum']) : null)
-            ?: $findKey($request->query(), ['orderRefNum','orderRef','orderRefNumber','orderId']);
-
-        // Map response/status code from various fields
-        $responseCode = $findKey($payloadAll, ['responseCode','status','respCode','code'])
-            ?: ($rawJson ? $findKey($rawJson, ['responseCode','status','respCode','code']) : null);
-
-        $amount = $findKey($payloadAll, ['amount','txnAmount'])
-            ?: ($rawJson ? $findKey($rawJson, ['amount','txnAmount']) : null);
-
-        if (!$orderRef) {
-            \Log::warning('Easypaisa callback missing order reference', [
-                'data' => $payloadAll,
-                'rawJson' => $rawJson,
-                'query' => $request->query(),
+            return response()->json([
+                'status' => true,
+                'message' => 'Payment successful',
+                'orderRefNum' => $orderRefNum
             ]);
-            return response()->json(['status' => false, 'message' => 'Missing orderRefNum'], 422);
         }
 
-        $booking = Booking::whereHas('meta', function($q) use ($orderRef) {
-            $q->where('name','easypaisa_order_ref')->where('val',$orderRef);
-        })->first();
-
-        if (!$booking) {
-            \Log::warning('Easypaisa callback booking not found', [ 'orderRef' => $orderRef ]);
-            return response()->json(['status' => false, 'message' => 'Booking not found'], 404);
-        }
-
-        if ($amount !== null && number_format((float)$booking->total, 2, '.', '') !== number_format((float)$amount, 2, '.', '')) {
-            \Log::warning('Easypaisa amount mismatch', [
-                'expected' => number_format((float)$booking->total, 2, '.', ''),
-                'received' => number_format((float)$amount, 2, '.', ''),
-                'orderRef' => $orderRef,
-            ]);
-            return response()->json(['status' => false, 'message' => 'Amount mismatch'], 422);
-        }
-
-        if (strtoupper((string)$responseCode) === '0000' || strtoupper((string)$responseCode) === 'SUCCESS') {
-            $booking->status = 'confirmed';
-            $booking->save();
-            BookingPayment::create([
-                'booking_id' => $booking->id,
-                'payment_gateway' => 'easypaisa',
-                'amount' => $booking->total,
-                'currency' => 'PKR',
-                'converted_amount' => $booking->total,
-                'converted_currency' => 'PKR',
-                'exchange_rate' => 1,
-                'status' => 'succeeded',
-                'logs' => json_encode($request->all()),
-                'create_user' => $booking->customer_id,
-                'update_user' => $booking->customer_id,
-            ]);
-            \Log::info('Easypaisa payment success', [ 'orderRef' => $orderRef, 'booking_id' => $booking->id ]);
-            return response()->json(['status' => true]);
-        }
-
-        $booking->status = 'cancelled';
-        $booking->save();
-        BookingPayment::create([
-            'booking_id' => $booking->id,
-            'payment_gateway' => 'easypaisa',
-            'amount' => $booking->total,
-            'currency' => 'PKR',
-            'converted_amount' => $booking->total,
-            'converted_currency' => 'PKR',
-            'exchange_rate' => 1,
-            'status' => 'failed',
-            'logs' => json_encode($request->all()),
-            'create_user' => $booking->customer_id,
-            'update_user' => $booking->customer_id,
+        return response()->json([
+            'status' => false,
+            'message' => 'Payment failed',
+            'orderRefNum' => $orderRefNum
         ]);
-        \Log::info('Easypaisa payment failed', [ 'orderRef' => $orderRef, 'responseCode' => $responseCode ]);
-        return response()->json(['status' => false]);
     }
 
 /**
