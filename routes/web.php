@@ -40,6 +40,9 @@ Route::get('paypal-form', '\Modules\Booking\Controllers\PayPalPaymentController@
 Route::post('/checkout', '\Modules\Booking\Controllers\BookingController@doCheckout')->name('booking.doCheckout');
 Route::get('/booking/payment/confirm/{gateway}', [BookingController::class, 'confirmPayment'])->name('booking.confirmPayment');
 
+// Easypaisa callback
+Route::post('/easypaisa/callback', [BookingController::class, 'easypaisaCallback'])->name('easypaisa.callback');
+
 // EasyPaisa specific routes
 Route::match(['get', 'post'], '/payment/easypaisa/callback', [BookingController::class, 'handleEasyPaisaCallback'])->name('booking.easypaisa.callback');
 Route::match(['get', 'post'], '/booking/confirm/easypaisa', [BookingController::class, 'handleEasyPaisaCallback'])->name('booking.easypaisa.confirm');

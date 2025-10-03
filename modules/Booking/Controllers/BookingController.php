@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Storage;
 use Gloudemans\Shoppingcart\Facades\Cart;
 use Modules\Booking\Gateways\EasyPaisaGateway;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Support\Facades\Http;
 
 class BookingController extends \App\Http\Controllers\Controller
 {
@@ -238,6 +239,83 @@ class BookingController extends \App\Http\Controllers\Controller
             }
         }
 
+        // Easypaisa Payment Processing
+        if ($payment_gateway == 'easypaisa') {
+            try {
+                $storeId       = config('easypaisa.store_id');
+                $accountId     = config('easypaisa.account_id');
+                $merchantName  = config('easypaisa.merchant_name');
+                $secretKey     = config('easypaisa.secret_key');
+                $currency      = config('easypaisa.currency', 'PKR');
+                $payMethod     = config('easypaisa.payment_method', 'MA');
+                $returnUrl     = config('easypaisa.return_url');
+                $cancelUrl     = config('easypaisa.cancel_url');
+                $callbackUrl   = config('easypaisa.callback_url');
+                $baseUrl       = rtrim(config('easypaisa.base_url'), '/');
+
+                if (!$storeId || !$secretKey || !$callbackUrl || !$baseUrl) {
+                    return $this->sendError('Easypaisa configuration missing.');
+                }
+
+                $orderRef = 'EP_' . $booking->id . '_' . time();
+                $booking->addMeta('easypaisa_order_ref', $orderRef);
+                $booking->save();
+
+                $amount      = number_format((float)$booking->total, 2, '.', '');
+                $expiryDate  = date('Ymd', strtotime('+24 hours'));
+
+                $payload = [
+                    'storeId'        => $storeId,
+                    'accountId'      => $accountId,
+                    'merchantName'   => $merchantName,
+                    'orderRefNum'    => $orderRef,
+                    'amount'         => $amount,
+                    'paymentMethod'  => $payMethod,
+                    'currency'       => $currency,
+                    'returnUrl'      => $returnUrl,
+                    'cancelUrl'      => $cancelUrl,
+                    'postBackURL'    => $callbackUrl,
+                    'expiryDate'     => $expiryDate,
+                    'autoRedirect'   => '1',
+                ];
+
+                $signatureString = $storeId . '&' . $orderRef . '&' . $amount . '&' . $expiryDate;
+                $payload['merchantHashedReq'] = hash_hmac('sha256', $signatureString, $secretKey);
+
+                $endpoint = $baseUrl . '/transactions';
+                $response = Http::asJson()->post($endpoint, $payload);
+
+                \Log::info('Easypaisa initiate response', [
+                    'endpoint' => $endpoint,
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+
+                if ($response->successful()) {
+                    $json = $response->json();
+                    if (!empty($json['paymentUrl'])) {
+                        return redirect()->away($json['paymentUrl']);
+                    }
+                }
+
+                // Fallback to hosted form if REST API does not respond as expected
+                $mode = strtolower(config('easypaisa.mode', 'sandbox'));
+                $formBase = $mode === 'production' ? 'https://easypay.easypaisa.com.pk' : 'https://easypaystg.easypaisa.com.pk';
+                $formAction = rtrim($formBase, '/') . '/easypay/Index.jsf';
+
+                $html = '<!DOCTYPE html><html><head><title>Redirecting...</title></head><body>';
+                $html .= '<p>Redirecting to Easypaisa...</p>';
+                $html .= '<form id="epForm" method="POST" action="' . htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8') . '">';
+                foreach ($payload as $key => $value) {
+                    $html .= '<input type="hidden" name="' . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') . '">';
+                }
+                $html .= '</form><script>(function(){function s(){try{var f=document.getElementById("epForm");if(f){f.submit();}}catch(e){}}if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",s);}else{setTimeout(s,0);}})();</script></body></html>';
+                return response($html)->header('Content-Type', 'text/html');
+            } catch (\Exception $e) {
+                return $this->sendError($e->getMessage());
+            }
+        }
+
         // Other gateways process normally
         \Log::info('Processing non-Stripe gateway: ' . $payment_gateway);
         Cart::destroy();
@@ -251,34 +329,68 @@ class BookingController extends \App\Http\Controllers\Controller
     }
     }
 
-    public function handleEasyPaisaCallback(Request $request)
+    public function easypaisaCallback(Request $request)
     {
-        // Log the callback request for debugging
-        \Log::info('EasyPaisa Callback Received', [
-            'method' => $request->method(),
+        \Log::info('Easypaisa callback received', [
             'data' => $request->all(),
-            'headers' => $request->headers->all()
+            'headers' => $request->headers->all(),
         ]);
 
-        $gateway = new EasyPaisaGateway();
-        $result = $gateway->handleCallback($request);
+        $orderRef = $request->input('orderRefNum') ?: $request->input('orderRef');
+        $responseCode = $request->input('responseCode') ?: $request->input('status');
+        $amount = $request->input('amount');
 
-        if ($result['success']) {
-            $booking = Booking::find($result['order_id']);
-            if ($booking) {
-                // Payment is already processed in the gateway callback
-                return redirect()->route('booking.detail', ['code' => $booking->code])
-                    ->with('success', 'Payment successful!');
-            }
+        if (!$orderRef) {
+            return response()->json(['status' => false, 'message' => 'Missing orderRefNum'], 422);
         }
 
-        // If it's a GET request (likely a redirect from EasyPaisa), redirect to checkout
-        if ($request->isMethod('get')) {
-            return redirect()->route('booking.checkout')
-                ->with('error', 'Payment was not completed. Please try again.');
+        $booking = Booking::whereHas('meta', function($q) use ($orderRef) {
+            $q->where('name','easypaisa_order_ref')->where('val',$orderRef);
+        })->first();
+
+        if (!$booking) {
+            return response()->json(['status' => false, 'message' => 'Booking not found'], 404);
         }
 
-        return redirect()->route('booking.checkout')->with('error', 'Payment failed or cancelled. Please try again.');
+        if ($amount !== null && number_format((float)$booking->total, 2, '.', '') !== number_format((float)$amount, 2, '.', '')) {
+            return response()->json(['status' => false, 'message' => 'Amount mismatch'], 422);
+        }
+
+        if (strtoupper((string)$responseCode) === '0000' || strtoupper((string)$responseCode) === 'SUCCESS') {
+            $booking->status = 'confirmed';
+            $booking->save();
+            BookingPayment::create([
+                'booking_id' => $booking->id,
+                'payment_gateway' => 'easypaisa',
+                'amount' => $booking->total,
+                'currency' => 'PKR',
+                'converted_amount' => $booking->total,
+                'converted_currency' => 'PKR',
+                'exchange_rate' => 1,
+                'status' => 'succeeded',
+                'logs' => json_encode($request->all()),
+                'create_user' => $booking->customer_id,
+                'update_user' => $booking->customer_id,
+            ]);
+            return response()->json(['status' => true]);
+        }
+
+        $booking->status = 'cancelled';
+        $booking->save();
+        BookingPayment::create([
+            'booking_id' => $booking->id,
+            'payment_gateway' => 'easypaisa',
+            'amount' => $booking->total,
+            'currency' => 'PKR',
+            'converted_amount' => $booking->total,
+            'converted_currency' => 'PKR',
+            'exchange_rate' => 1,
+            'status' => 'failed',
+            'logs' => json_encode($request->all()),
+            'create_user' => $booking->customer_id,
+            'update_user' => $booking->customer_id,
+        ]);
+        return response()->json(['status' => false]);
     }
 
 /**
