@@ -127,14 +127,17 @@ class BookingController extends \App\Http\Controllers\Controller
     }
     $gateways = get_payment_gateways();
 
-    if (empty($gateways[$payment_gateway]) || !class_exists($gateways[$payment_gateway])) {
-        return $this->sendError(__("Payment gateway not found"));
-    }
+    $gatewayObj = null;
+    if ($payment_gateway !== 'easypaisa') {
+        if (empty($gateways[$payment_gateway]) || !class_exists($gateways[$payment_gateway])) {
+            return $this->sendError(__("Payment gateway not found"));
+        }
 
-    $gatewayObj = new $gateways[$payment_gateway]($payment_gateway);
+        $gatewayObj = new $gateways[$payment_gateway]($payment_gateway);
 
-    if (!$gatewayObj->isAvailable()) {
-        return $this->sendError(__("Payment gateway is not available"));
+        if (!$gatewayObj->isAvailable()) {
+            return $this->sendError(__("Payment gateway is not available"));
+        }
     }
 
     try {
