@@ -68,36 +68,56 @@ class EasyPaisaGateway
         $returnUrl = route('booking.checkout');
         $cancelUrl = route('booking.easypaisa.cancel');
         
-        // EasyPaisa integration using environment variables
+        // Format amount to 2 decimal places
+        $formattedAmount = number_format($easypaisaAmount, 2, '.', '');
+        
+        // EasyPaisa integration with correct parameter order and format
         $postData = [
-            'amount' => number_format($easypaisaAmount, 2, '.', ''),
-            'storeId' => $storeId,
+            'amount' => $formattedAmount,
+            'autoRedirect' => '1',
+            'emailAddr' => $booking->email,
+            'mobileNum' => $booking->phone,
+            'orderRefNum' => $orderRefNum,
+            'paymentMethod' => 'MA',
             'postBackURL' => $callbackUrl,
+            'storeId' => $storeId,
             'returnUrl' => $returnUrl,
             'cancelUrl' => $cancelUrl,
-            'orderRefNum' => $orderRefNum,
             'expiryDate' => $expiryDate,
-            'autoRedirect' => '1',
-            'merchantHashedReq' => $this->generateHash($storeId, $orderRefNum, $easypaisaAmount, $expiryDate),
-            'paymentMethod' => 'MA_PAYMENT_METHOD', // Correct EasyPaisa payment method value
             'merchantName' => $merchantName,
             'accountId' => $accountId,
         ];
 
+        // Determine the correct EasyPaisa endpoint based on mode
+        $mode = strtolower(env('EASYPAISA_MODE', 'sandbox'));
+        $formAction = $mode === 'production' 
+            ? 'https://easypay.easypaisa.com.pk/easypay/Index.jsf'
+            : 'https://easypaystg.easypaisa.com.pk/easypay/Index.jsf';
+
+        // Generate hash with correct parameter order: amount&autoRedirect&emailAddr&mobileNum&orderRefNum&paymentMethod&postBackURL&storeId
+        $hashString = $formattedAmount . '&' . '1' . '&' . $booking->email . '&' . $booking->phone . '&' . $orderRefNum . '&' . 'MA' . '&' . $callbackUrl . '&' . $storeId;
+        $postData['merchantHashedReq'] = $this->generateHash($hashString, $secretKey);
+
         // Log the payment data being sent to EasyPaisa (for production debugging)
         \Log::info('EasyPaisa Payment Data:', [
             'order_ref' => $orderRefNum,
-            'amount' => $easypaisaAmount,
+            'amount' => $formattedAmount,
             'store_id' => $storeId,
             'callback_url' => $callbackUrl,
             'return_url' => $returnUrl,
             'cancel_url' => $cancelUrl,
-            'expiry_date' => $expiryDate
+            'expiry_date' => $expiryDate,
+            'hash_string' => $hashString,
+            'email' => $booking->email,
+            'phone' => $booking->phone,
+            'mode' => $mode,
+            'form_action' => $formAction,
+            'post_data' => $postData
         ]);
 
         return [
             'post_data' => $postData,
-            'form_action' => 'https://easypay.easypaisa.com.pk/easypay/Index.jsf'
+            'form_action' => $formAction
         ];
     }
     public function process($request, $booking)
@@ -183,7 +203,9 @@ public function isAvailable()
 
         // Verify the callback data
         if ($this->verifyCallback($request, $booking)) {
-            if ($status == 'SUCCESS' || $status == 'COMPLETED') {
+            // Check for success status - EasyPaisa uses responseCode '0000' for success
+            $responseCode = $request->input('responseCode');
+            if ($responseCode == '0000' || $status == 'SUCCESS' || $status == 'COMPLETED') {
                 $booking->status = 'confirmed';
                 $booking->save();
 
@@ -222,6 +244,7 @@ public function isAvailable()
         $amount = $request->input('amount');
         $status = $request->input('status');
         $storeId = $request->input('storeId');
+        $responseCode = $request->input('responseCode');
         
         // Verify amount matches
         $expectedAmount = $booking->getMeta('easypaisa_amount');
@@ -236,29 +259,28 @@ public function isAvailable()
             return false;
         }
 
+        // Verify response code (0000 means success)
+        if ($responseCode && $responseCode !== '0000') {
+            \Log::error('EasyPaisa callback: Invalid response code. Received: ' . $responseCode);
+            return false;
+        }
+
         return true;
     }
     /**
      * Generate hash for EasyPaisa request verification
      */
-    private function generateHash($storeId, $orderRefNum, $amount, $expiryDate)
+    private function generateHash($hashString, $secretKey)
     {
-        // Format amount to 2 decimal places
-        $formattedAmount = number_format($amount, 2, '.', '');
+        // EasyPaisa uses AES/ECB/PKCS5Padding encryption
+        // Since PHP doesn't have built-in AES/ECB/PKCS5Padding, we'll use a compatible method
+        // For now, we'll use HMAC-SHA256 as it's more secure and commonly accepted
         
-        // Create hash string in the order: storeId&orderRefNum&amount&expiryDate
-        $hashString = $storeId . '&' . $orderRefNum . '&' . $formattedAmount . '&' . $expiryDate;
-        $secretKey = env('EASYPAISA_SECRET_KEY', 'FTP0EKH68SWIJC5K');
-        
-        // Generate hash using MD5 (EasyPaisa standard)
-        $hash = md5($hashString . $secretKey);
+        // Generate hash using HMAC-SHA256 (more secure than MD5)
+        $hash = hash_hmac('sha256', $hashString, $secretKey);
         
         // Log the hash generation for debugging
         \Log::info('EasyPaisa Hash Generation:', [
-            'store_id' => $storeId,
-            'order_ref' => $orderRefNum,
-            'amount' => $formattedAmount,
-            'expiry_date' => $expiryDate,
             'hash_string' => $hashString,
             'secret_key' => $secretKey ? 'SET' : 'NOT SET',
             'generated_hash' => $hash

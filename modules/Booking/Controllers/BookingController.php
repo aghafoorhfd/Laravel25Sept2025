@@ -241,78 +241,15 @@ class BookingController extends \App\Http\Controllers\Controller
             }
         }
 
-        // Easypaisa Payment Processing
+        // Easypaisa Payment Processing - Use the EasyPaisaGateway class
         if ($payment_gateway == 'easypaisa') {
             try {
-                $storeId       = config('easypaisa.store_id');
-                $accountId     = config('easypaisa.account_id');
-                $merchantName  = config('easypaisa.merchant_name');
-                $secretKey     = config('easypaisa.secret_key');
-                $currency      = config('easypaisa.currency', 'PKR');
-                $payMethod     = config('easypaisa.payment_method', 'MA');
-                $returnUrl     = config('easypaisa.return_url');
-                $cancelUrl     = config('easypaisa.cancel_url');
-                $callbackUrl   = config('easypaisa.callback_url');
-                $baseUrl       = rtrim(config('easypaisa.base_url'), '/');
-
-                if (!$storeId || !$secretKey || !$callbackUrl || !$baseUrl) {
-                    return $this->sendError('Easypaisa configuration missing.');
+                $gatewayObj = new \Modules\Booking\Gateways\EasyPaisaGateway();
+                if (!$gatewayObj->isAvailable()) {
+                    return $this->sendError('EasyPaisa payment gateway is not available');
                 }
-
-                $orderRef = 'EP_' . $booking->id . '_' . time();
-                $booking->addMeta('easypaisa_order_ref', $orderRef);
-                $booking->save();
-
-                $amount      = number_format((float)$booking->total, 2, '.', '');
-                $expiryDate  = date('Ymd', strtotime('+24 hours'));
-
-                $payload = [
-                    'storeId'        => $storeId,
-                    'accountId'      => $accountId,
-                    'merchantName'   => $merchantName,
-                    'orderRefNum'    => $orderRef,
-                    'amount'         => $amount,
-                    'paymentMethod'  => $payMethod,
-                    'currency'       => $currency,
-                    'returnUrl'      => $returnUrl,
-                    'cancelUrl'      => $cancelUrl,
-                    'postBackURL'    => $callbackUrl,
-                    'expiryDate'     => $expiryDate,
-                    'autoRedirect'   => '1',
-                ];
-
-                $signatureString = $storeId . '&' . $orderRef . '&' . $amount . '&' . $expiryDate;
-                $payload['merchantHashedReq'] = hash_hmac('sha256', $signatureString, $secretKey);
-
-                $endpoint = $baseUrl . '/transactions';
-                $response = Http::asJson()->post($endpoint, $payload);
-
-                \Log::info('Easypaisa initiate response', [
-                    'endpoint' => $endpoint,
-                    'status' => $response->status(),
-                    'body'   => $response->body(),
-                ]);
-
-                if ($response->successful()) {
-                    $json = $response->json();
-                    if (!empty($json['paymentUrl'])) {
-                        return redirect()->away($json['paymentUrl']);
-                    }
-                }
-
-                // Fallback to hosted form if REST API does not respond as expected
-                $mode = strtolower(config('easypaisa.mode', 'sandbox'));
-                $formBase = $mode === 'production' ? 'https://easypay.easypaisa.com.pk' : 'https://easypaystg.easypaisa.com.pk';
-                $formAction = rtrim($formBase, '/') . '/easypay/Index.jsf';
-
-                $html = '<!DOCTYPE html><html><head><title>Redirecting...</title></head><body>';
-                $html .= '<p>Redirecting to Easypaisa...</p>';
-                $html .= '<form id="epForm" method="POST" action="' . htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8') . '">';
-                foreach ($payload as $key => $value) {
-                    $html .= '<input type="hidden" name="' . htmlspecialchars($key, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') . '">';
-                }
-                $html .= '</form><script>(function(){function s(){try{var f=document.getElementById("epForm");if(f){f.submit();}}catch(e){}}if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",s);}else{setTimeout(s,0);}})();</script></body></html>';
-                return response($html)->header('Content-Type', 'text/html');
+                
+                return $gatewayObj->process($request, $booking);
             } catch (\Exception $e) {
                 return $this->sendError($e->getMessage());
             }
