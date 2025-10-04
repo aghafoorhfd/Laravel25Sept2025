@@ -244,6 +244,9 @@ class BookingController extends \App\Http\Controllers\Controller
         // Easypaisa Payment Processing - Use the EasyPaisaGateway class
         if ($payment_gateway == 'easypaisa') {
             try {
+                // Manually include the file to ensure it's loaded
+                require_once base_path('modules/Booking/Gateways/EasyPaisaGateway.php');
+                
                 $gatewayObj = new \Modules\Booking\Gateways\EasyPaisaGateway();
                 if (!$gatewayObj->isAvailable()) {
                     return $this->sendError('EasyPaisa payment gateway is not available');

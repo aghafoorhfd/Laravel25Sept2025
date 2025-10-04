@@ -1,7 +1,10 @@
 <?php
 
 // Suppress PHP 8.1+ deprecation warnings for Laravel 7 compatibility
-error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+if (version_compare(PHP_VERSION, '8.0', '>=')) {
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+    ini_set('error_reporting', E_ALL & ~E_DEPRECATED & ~E_STRICT);
+}
 
 /*
 |--------------------------------------------------------------------------
