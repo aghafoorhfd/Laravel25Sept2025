@@ -1,5 +1,8 @@
 <?php
 
+// Suppress PHP 8.1+ deprecation warnings for Laravel 7 compatibility
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+
 /*
 |--------------------------------------------------------------------------
 | Create The Application
